@@ -22,9 +22,12 @@ install: PICOFoxweb
 	mkdir -p /var/www/foxweb
 	cp -r webroot -t /var/www/foxweb/
 	chown -R picofoxweb:picofoxweb /var/www/foxweb
+	touch /var/log/foxweb.log
+	chown picofoxweb:picofoxweb /var/log/foxweb.log
 
 uninstall:
 	systemctl stop picofoxweb
+	rm -f /var/log/foxweb.log
 	rm -rf /var/www/foxweb
 	rm -f /usr/local/sbin/PICOFoxweb
 	rm -f /etc/systemd/system/picofoxweb.service

@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
+#include <syslog.h>
 
 // Client request
 extern char *method, // "GET" or "POST"

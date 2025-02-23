@@ -10,6 +10,7 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <syslog.h>
 
 #define MAX_CONNECTIONS 1000
 #define BUF_SIZE 65535
@@ -37,7 +38,7 @@ void serve_forever(const char *PORT) {
 
   int slot = 0;
 
-  fprintf(stderr, "Server started %shttp://127.0.0.1:%s%s\n", "\033[92m", PORT,
+  syslog(LOG_INFO, "Server started %shttp://127.0.0.1:%s%s\n", "\033[92m", PORT,
          "\033[0m");
 
   // create shared memory for client slot array
@@ -59,7 +60,7 @@ void serve_forever(const char *PORT) {
     clients[slot] = accept(listenfd, (struct sockaddr *)&clientaddr, &addrlen);
 
     if (clients[slot] < 0) {
-      perror("accept() error");
+      syslog(LOG_ERR, "accept() error");
       exit(1);
     } else {
       if (fork() == 0) {
@@ -88,7 +89,7 @@ void start_server(const char *port) {
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_PASSIVE;
   if (getaddrinfo(NULL, port, &hints, &res) != 0) {
-    perror("getaddrinfo() error");
+    syslog(LOG_ERR, "getaddrinfo() error");
     exit(1);
   }
   // socket and bind
@@ -102,7 +103,7 @@ void start_server(const char *port) {
       break;
   }
   if (p == NULL) {
-    perror("socket() or bind()");
+    syslog(LOG_ERR, "socket() or bind()");
     exit(1);
   }
 
@@ -110,7 +111,7 @@ void start_server(const char *port) {
 
   // listen for incoming connections
   if (listen(listenfd, QUEUE_SIZE) != 0) {
-    perror("listen() error");
+    syslog(LOG_ERR, "listen() error");
     exit(1);
   }
 }
@@ -165,9 +166,9 @@ void respond(int slot) {
   rcvd = recv(clients[slot], buf, BUF_SIZE, 0);
 
   if (rcvd < 0) // receive error
-    fprintf(stderr, ("recv() error\n"));
+    syslog(LOG_ERR, "recv() error");
   else if (rcvd == 0) // receive socket closed
-    fprintf(stderr, "Client disconnected upexpectedly.\n");
+    syslog(LOG_ERR, "Client disconnected upexpectedly.");
   else // message received
   {
     buf[rcvd] = '\0';
@@ -177,8 +178,6 @@ void respond(int slot) {
     prot = strtok(NULL, " \t\r\n");
 
     uri_unescape(uri);
-
-    fprintf(stderr, "\x1b[32m + [%s] %s\x1b[0m\n", method, uri);
 
     qs = strchr(uri, '?');
 
@@ -203,7 +202,6 @@ void respond(int slot) {
       h->name = key;
       h->value = val;
       h++;
-      fprintf(stderr, "[H] %s: %s\n", key, val);
       t = val + 1 + strlen(val);
       if (t[1] == '\r' && t[2] == '\n')
         break;

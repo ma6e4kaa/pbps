@@ -1,5 +1,6 @@
 #include "httpd.h"
 #include <sys/stat.h>
+#include <stdio.h>
 
 #define CHUNK_SIZE 1024 // read 1024 bytes at a time
 
@@ -7,6 +8,25 @@
 #define PUBLIC_DIR "/var/www/foxweb/webroot"
 #define INDEX_HTML "/index.html"
 #define NOT_FOUND_HTML "/404.html"
+#define LOG_FILE "/var/log/foxweb.log"
+
+void log_request(const char *method, const char *uri, int status, int response_size) {
+    FILE *log_file = fopen(LOG_FILE, "a");
+    if (!log_file) {
+        syslog(LOG_ERR, "Failed to open log file");
+        return;
+    }
+
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    char timestamp[32];
+    strftime(timestamp, 32, "%d/%b/%Y:%H:%M:%S %z", tm_info);
+
+    fprintf(log_file, "%s - - [%s] \"%s %s HTTP/1.1\" %d %d \"%s\" \"%s\"\n",
+            request_header("X-Forwarded-For") ? request_header("X-Forwarded-For") : "127.0.0.1", timestamp, method, uri, status, response_size, request_header("Referer") ? request_header("Referer") : "-", request_header("User-Agent") ? request_header("User-Agent") : "-");
+
+    fclose(log_file);
+}
 
 int main(int c, char **v) {
   char *port = c == 1 ? "8000" : v[1];
@@ -51,8 +71,10 @@ void route() {
     HTTP_200;
     if (file_exists(index_html)) {
       read_file(index_html);
+      log_request("GET", "/", 200, CHUNK_SIZE);
     } else {
       printf("Hello! You are using %s\n\n", request_header("User-Agent"));
+      log_request("GET", "/", 200, 0);
     }
   }
 
@@ -66,6 +88,7 @@ void route() {
       printf("%s: %s\n", h->name, h->value);
       h++;
     }
+    log_request("GET", "/test", 200, 0);
   }
 
   POST("/") {
@@ -74,6 +97,7 @@ void route() {
     printf("Fetch the data using `payload` variable.\n");
     if (payload_size > 0)
       printf("Request body: %s", payload);
+    log_request("POST", "/", 201, payload_size);
   }
 
   GET(uri) {
@@ -83,11 +107,13 @@ void route() {
     if (file_exists(file_name)) {
       HTTP_200;
       read_file(file_name);
+      log_request("GET", uri, 200, CHUNK_SIZE);
     } else {
       HTTP_404;
       sprintf(file_name, "%s%s", PUBLIC_DIR, NOT_FOUND_HTML);
       if (file_exists(file_name))
         read_file(file_name);
+      log_request("GET", uri, 404, 0);
     }
   }
 
